@@ -253,6 +253,7 @@ static void frame_arrange_node(TileNode *node, Monitor *m, struct wlr_box box)
     if (!second_visible)
     {
         frame_arrange_node(node->first, m, box);
+        return;
     }
     
     first = box;
@@ -444,6 +445,8 @@ static void frame_resize(const Arg *arg)
        {
            break;
        }
+
+       node = node->parent;
    }
 
    if (!node->parent)
@@ -453,7 +456,7 @@ static void frame_resize(const Arg *arg)
    parent = node->parent;
 
     
-   if (arg->i == FRAME_RIGHT || arg->i == FRAME_DOWN)
+   if (arg->i == FRAME_LEFT || arg->i == FRAME_DOWN)
    {
        delta = 0.05f;
    }
@@ -467,7 +470,7 @@ static void frame_resize(const Arg *arg)
        delta = -delta;
    }
 
-   parent->ratio = delta;
+   parent->ratio += delta;
 
    if (parent->ratio < 0.1f)
    {
