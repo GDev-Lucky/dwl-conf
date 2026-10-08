@@ -29,6 +29,8 @@ struct TileNode {
 
     float ratio;
     int split;
+
+    Client *last_neighbor[4];
 };
 
 /* HELPERS */
@@ -311,185 +313,102 @@ static int frame_overlap(int a1, int a2, int b1, int b2)
     return end > start ? end - start : 0;
 }
 
-static void frame_focus(const Arg *arg)
+static int frame_opposite(int dir)
 {
-    Client *sel = focustop(selmon);
-    Client *c;
-    Client *best = NULL;
-        
-    int sx1, sy1, sx2, sy2;
-    int scx, scy;
-    int best_aligned;
-    int best_edge;
-
-    int best_gap = 0;
-    int best_overlap = 0;
-    int best_offset = 0;
-
-    if (!sel || sel->isfullscreen)
+    switch(dir)
     {
-        return;
+        case FRAME_LEFT:
+            return FRAME_RIGHT;
+
+        case FRAME_RIGHT:
+            return FRAME_LEFT;
+
+        case FRAME_UP:
+            return FRAME_DOWN;
+
+        case FRAME_DOWN:
+            return FRAME_UP;
     }
 
-    sx1 = sel->geom.x;
-    sy1 = sel->geom.y;
-    sx2 = sx1 + sel->geom.width;
-    sy2 = sy1 + sel->geom.height;
+    return dir;
+}
 
-    scx = sx1 + sel->geom.width / 2;
-    scy = sy1 + sel->geom.height / 2;
+static int frame_direction_gap(Client *from, Client *to, int dir, int *gap, int *overlap)
+{
+    int fx1 = from->geom.x;
+    int fy1 = from->geom.y;
+    int fx2 = fx1 + from->geom.width;
+    int fy2 = fy1 + from->geom.height;
+
+    int tx1 = to->geom.x;
+    int ty1 = to->geom.y;
+    int tx2 = tx1 + to->geom.width;
+    int ty2 = ty1 + to->geom.height;
+
+    switch (dir)
+    {
+        case FRAME_LEFT:
+
+            if (tx2 > fx1)
+            {
+                return 0;
+            }
+
+            *gap = fx1 - tx2;
+            *overlap = frame_overlap(fy1, fy2, ty1, ty2);
+            break;
+
+        case FRAME_RIGHT:
+
+            if (tx1 > fx2)
+            {
+                return 0;
+            }
+
+            *gap = tx1 - fx2;
+            *overlap = frame_overlap(fy1, fy2, ty1, ty2);
+            break;
+
+        case FRAME_UP:
+
+            if (ty2 > fy1)
+            {
+                return 0;
+            }
+
+            *gap = fy1 - ty2;
+            *overlap = frame_overlap(fx1, fx2, tx1, tx2);
+            break;
+
+        case FRAME_DOWN:
+
+            if (ty1 > fy2)
+            {
+                return 0;
+            }
+
+            *gap = ty1 - fy2;
+            *overlap = frame_overlap(fx1, fx2, tx1, tx2);
+            break;
+
+        default:
+            return 0;
+
+    }
+
+    return *overlap > 0;
+
+}
+
+static int frame_min_gap(Client *sel, int dir)
+{
+    Client* c;
+    int best = -1;
 
     wl_list_for_each(c, &clients, link)
     {
-        int cx1, cy1, cx2, cy2;
-        int ccx, ccy;
-
         int gap;
         int overlap;
-        int offset;
-
-
-        if (c == sel)
-        {
-            continue;
-        }
-
-        if (c->mon != selmon)
-        {
-            continue;
-        }
-
-        if (!VISIBLEON(c, selmon))
-        {
-            continue;
-        }
-
-        if (c->isfloating || c ->isfullscreen)
-        {
-            continue;
-        }
-        
-        cx1 = c->geom.x;
-        cy1 = c->geom.y;
-        cx2 = cx1 + c->geom.width; 
-        cy2 = cy1 + c->geom.height;
-        
-        ccx = cx1 + c->geom.width / 2;
-        ccy = cy1 + c->geom.height / 2;
-
-        switch(arg->i)
-        {
-            case FRAME_LEFT:
-
-                if (cx2 > sx1)
-                {
-                    continue;
-                }
-
-                overlap = frame_overlap(sy1, sy2, cy1, cy2);
-
-                if (!overlap)
-                {
-                    continue;
-                }
-
-                gap = sx1 - cx2;
-                offset = ccy > scy ? ccy - scy : scy - ccy;
-                break;
-
-            case FRAME_RIGHT:
-
-                if (cx1 > sx2)
-                {
-                    continue;
-                }
-
-                overlap = frame_overlap(sy1, sy2, cy1, cy2);
-
-                if (!overlap)
-                {
-                    continue;
-                }
-
-                gap = cx1 - sx2;
-                offset = ccy > scy ? ccy - scy : scy - ccy;
-                break;
-
-            case FRAME_UP: 
-                
-                if (cy2 > sy1)
-                {
-                    continue;
-                }
-
-                overlap = frame_overlap(sx1, sx2, cx1, cx2);
-
-                if (!overlap)
-                {
-                    continue;
-                }
-
-                gap = sy1 - cy2;
-                offset = ccx > scx ? ccx - scx : scx - ccx;
-                break;
-
-            case FRAME_DOWN:
-
-                if (cy1 > sy2)
-                {
-                    continue;
-                }
-
-                overlap = frame_overlap(sx1, sx2, cx1, cx2);
-
-                if (!overlap)
-                {
-                    continue;
-                }
-
-                gap = cy1 - sy2;
-                offset = ccx > scx ? ccx - scx : scx - ccx;
-                break;
-
-            default:
-                return;
-        }
-
-        if (!best || gap < best_gap)
-        {
-            best = c;
-            best_gap = gap;
-            best_overlap = overlap;
-            best_offset = offset;
-        }
-
-
-    }
-
-    if (best) 
-    {
-        focusclient(best, 1);
-        return;
-    }
-
-    best = NULL;
-
-    best_aligned = 0;
-    best_edge = 0;
-
-    best_overlap = 0;
-    best_offset = 0;
-
-    wl_list_for_each(c, &fstack, flink)
-    {
-        int cx1, cy1, cx2, cy2;
-        int ccx, ccy;
-
-        int overlap;
-        int aligned;
-        int edge;
-        int offset;
-        int better_edge;
 
         if (c == sel)
         {
@@ -511,111 +430,112 @@ static void frame_focus(const Arg *arg)
             continue;
         }
 
-        cx1 = c->geom.x;
-        cy1 = c->geom.y;
-        cx2 = cx1 + c->geom.width; 
-        cy2 = cy1 + c->geom.height;
-        
-        ccx = cx1 + c->geom.width / 2;
-        ccy = cy1 + c->geom.height / 2;
-
-        switch (arg->i)
+        if (!frame_direction_gap(sel, c, dir, &gap, &overlap))
         {
-            case FRAME_LEFT:
-
-                overlap = frame_overlap(sy1, sy2, cy1, cy2);
-
-                aligned = overlap > 0;
-                edge = cx2;
-
-                offset = ccy > scy ? ccy - scy : scy - ccy;
-
-                break;
-
-            case FRAME_RIGHT:
-
-                overlap = frame_overlap(sy1, sy2, cy1, cy2);
-
-                aligned = overlap > 0;
-                edge = cx1;
-
-                offset = ccy > scy ? ccy - scy : scy - ccy;
-
-                break;
-
-            case FRAME_UP:
-
-                overlap = frame_overlap(sx1, sx2, cx1, cx2);
-
-                aligned = overlap > 0;
-                edge = cy2;
-
-                offset = ccx > scx ? ccx - scx : scx - ccx;
-
-                break;
-
-            case FRAME_DOWN:
-
-                overlap = frame_overlap(sx1, sx2, cx1, cx2);
-
-                aligned = overlap > 0;
-                edge = cy1;
-
-                offset = ccx > scx ? ccx - scx : scx - ccx;
-
-                break;
-
-            default:
-
-                return;
+            continue;
         }
 
-        better_edge = 0;
-
-        if (!best) 
+        if (best < 0 || gap < best)
         {
-            better_edge = 1;
+            best = gap;
         }
-        else
-        {
-            switch(arg->i)
-            {
-                case FRAME_LEFT:
-                case FRAME_UP:
+    }
 
-                    better_edge = edge > best_edge;
-                    break;
+    return best;
+}
 
-                case FRAME_RIGHT:
-                case FRAME_DOWN:
+static void frame_focus(const Arg *arg)
+{
+    Client *sel = focustop(selmon);
+    Client *c;
+    Client *best = NULL;
+    Client *remembered;
+    
+    int dir = arg->i;
+    int opposite;
+    int min_gap;
+    int gap;
+    int overlap;
 
-                    better_edge = edge < best_edge;
-                    break;
-
-            }
-        }
+    if (!sel || !sel->tile || sel->isfullscreen)
+    {
+        return;
+    }
+    
+    opposite = frame_opposite(dir);
+    min_gap = frame_min_gap(sel, arg->i);
+    
+    if (min_gap >= 0)
+    {
+        remembered = sel->tile->last_neighbor[dir];
 
         if (
-                !best
-                || (aligned && !best_aligned)
-                || (aligned == best_aligned && better_edge)
-                || (aligned == best_aligned && edge == best_edge && overlap > best_overlap)
-                || (aligned == best_aligned && edge == best_edge && overlap == best_overlap && offset < best_offset)
+                remembered
+                && remembered != sel
+                && remembered->tile
+                && remembered->mon == selmon
+                && VISIBLEON(remembered, selmon)
+                && !remembered->isfloating
+                && frame_direction_gap(sel, remembered, dir, &gap, &overlap)
+                && gap == min_gap
            )
         {
-            best = c;
-            
-            best_aligned = aligned;
-            best_edge = edge;
-            best_overlap = overlap;
-            best_offset = offset;
+            best = remembered;
+        }
+
+        if (!best)
+        {
+            wl_list_for_each(c, &fstack, flink)
+            {
+                if (c == sel)
+                {
+                    continue;
+                }
+
+                if (c->mon != selmon)
+                {
+                    continue;
+                }
+
+                if (!VISIBLEON(c, selmon))
+                {
+                    continue;
+                }
+
+                if (c->isfloating || c->isfullscreen)
+                {
+                    continue;
+                }
+
+                if (!frame_direction_gap(sel, c, dir, &gap, &overlap))
+                {
+                    continue;
+                }
+
+                if (gap != min_gap)
+                {
+                    continue;
+                }
+
+                best = c;
+                break;
+            }
         }
     }
 
-    if (best)
+    if (!best)
     {
-        focusclient(best, 1);
+        return;
     }
+
+    sel->tile->last_neighbor[dir] = best;
+
+    if (best->tile)
+    {
+        best->tile->last_neighbor[opposite] = sel;
+    }
+
+    focusclient(best, 1);
 }
 
     
