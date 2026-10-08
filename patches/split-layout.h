@@ -416,70 +416,70 @@ static void frame_focus(const Arg *arg)
     
 static void frame_resize(const Arg *arg)
 {
-    Client *sel = focustop(selmon);
+   Client *sel = focustop(selmon);
+   TileNode *node;
+   TileNode *parent;
+   int wanted_split;
+   float delta;
 
-    TileNode *node;
+   if (!sel || !sel->tile || sel->isfloating || sel->isfullscreen)
+   {
+       return;
+   }
 
-    if (selmon->lt[selmon->sellt]->arrange != frame_layout)
-    {
-        return;
-    }
+   node = sel->tile;
 
-    if (!sel || !sel->tile || sel->isfloating || sel->isfullscreen)
-    {
-        return;
-    }
+   if (arg->i == FRAME_LEFT || arg->i == FRAME_RIGHT)
+   {
+       wanted_split = SPLIT_LEFT_RIGHT;
+   }
+   else
+   {
+       wanted_split = SPLIT_TOP_BOTTOM;
+   }
 
-    node = sel->tile;
+   while (node->parent)
+   {
+       if (node->parent->split == wanted_split)
+       {
+           break;
+       }
+   }
 
-    while (node->parent)
-    {
-        TileNode *parent = node->parent;
-        float delta = 0.0f;
+   if (!node->parent)
+   {
+       return;
+   }
+   parent = node->parent;
 
-        if (parent->split == SPLIT_LEFT_RIGHT)
-        {
-            if (arg->i == FRAME_RIGHT && parent->first == node)
-            {
-                delta = 0.05f;
-            }
-            else if (arg->i == FRAME_LEFT && parent->second == node)
-            {
-                delta = -0.05f;
-            }
-        }
-        else
-        {
-            if (arg->i == FRAME_DOWN && parent->first == node)
-            {
-                delta = 0.05f;
-            }
-            else if (arg->i == FRAME_UP && parent->second == node)
-            {
-                delta = -0.05f;
-            }
-        }
+    
+   if (arg->i == FRAME_RIGHT || arg->i == FRAME_DOWN)
+   {
+       delta = 0.05f;
+   }
+   else
+   {
+       delta = -0.05f;
+   }
 
-        if (delta != 0.0f) 
-        {
-            parent->ratio += delta;
+   if (parent->second == node)
+   {
+       delta = -delta;
+   }
 
-            if (parent->ratio < 0.1f)
-            {
-                parent->ratio = 0.1f;
-            }
+   parent->ratio = delta;
 
-            if (parent->ratio > 0.9f)
-            {
-                parent->ratio = 0.9f;
-            }
+   if (parent->ratio < 0.1f)
+   {
+       parent->ratio = 0.1f;
+   }
+   
+   if (parent->ratio > 0.9f)
+   {
+       parent->ratio = 0.9f;
+   }
 
-            arrange(selmon);
-            return;
-        }
-
-        node = parent;
-    }
+   arrange(selmon);
 }
 
 
