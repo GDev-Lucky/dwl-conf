@@ -137,6 +137,9 @@ frame_insert(Client *c)
     branch->first = target;
     branch->second = leaf;
 
+    branch->ratio = 0.5f;
+    branch->split = m->next_split;
+
     target->parent = branch;
     leaf->parent = branch;
 
@@ -190,18 +193,20 @@ frame_remove(Client *c)
     grand = parent->parent;
     sibling->parent = grand;
 
-    if (!grand) {
-
-        if (m) {
+    if (!grand)
+    {
+        if (m) 
+        {
             m->tile_root = sibling;
         }
-        else if (grand->first == parent) {
-            grand->first = sibling;
-        }
-        else {
-            grand->second = sibling;
-        }
-
+    }
+    else if (grand->first == parent)
+    {
+        grand->first = sibling;
+    }
+    else 
+    {
+        grand->second = sibling;
     }
 
     c->tile = NULL;
@@ -241,13 +246,13 @@ static void frame_arrange_node(TileNode *node, Monitor *m, struct wlr_box box)
 
     if (!first_visible)
     {
-        frame_arrange_node(node->first, m, box);
+        frame_arrange_node(node->second, m, box);
         return;
     }
 
     if (!second_visible)
     {
-        frame_arrange_node(node->second, m, box);
+        frame_arrange_node(node->first, m, box);
     }
     
     first = box;
@@ -415,10 +420,17 @@ static void frame_resize(const Arg *arg)
 
     TileNode *node;
 
+    if (selmon->lt[selmon->sellt]->arrange != frame_layout)
+    {
+        return;
+    }
+
     if (!sel || !sel->tile || sel->isfloating || sel->isfullscreen)
     {
         return;
     }
+
+    node = sel->tile;
 
     while (node->parent)
     {

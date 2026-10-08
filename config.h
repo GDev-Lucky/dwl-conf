@@ -31,9 +31,9 @@ static const Rule rules[] = {
 /* layout(s) */
 static const Layout layouts[] = {
 	/* symbol     arrange function */
-	//{ "[]=",      tile },
-	//{ "><>",      NULL },    /* no layout function means floating behavior */
-	//{ "[M]",      monocle },
+	{ "[]=",      tile },
+	{ "><>",      NULL },    /* no layout function means floating behavior */
+	{ "[M]",      monocle },
     { "[]",       frame_layout },
 };
 
@@ -125,8 +125,8 @@ static const Key keys[] = {
 	{ MODKEY,                    XKB_KEY_Return,      spawn,            {.v = termcmd} },
 	//{ MODKEY,                    XKB_KEY_j,           focusstack,       {.i = +1} },
 	//{ MODKEY,                    XKB_KEY_k,           focusstack,       {.i = -1} },
-	{ MODKEY,                    XKB_KEY_i,           incnmaster,       {.i = +1} },
-	{ MODKEY,                    XKB_KEY_d,           incnmaster,       {.i = -1} },
+	//{ MODKEY,                    XKB_KEY_i,           incnmaster,       {.i = +1} },
+	//{ MODKEY,                    XKB_KEY_d,           incnmaster,       {.i = -1} },
 	//{ MODKEY,                    XKB_KEY_h,           setmfact,         {.f = -0.05f} },
 	//{ MODKEY,                    XKB_KEY_l,           setmfact,         {.f = +0.05f} },
 	{ MODKEY,                    XKB_KEY_a,           zoom,             {0} },
@@ -135,6 +135,7 @@ static const Key keys[] = {
 	{ MODKEY,                    XKB_KEY_t,           setlayout,        {.v = &layouts[0]} },
 	{ MODKEY,                    XKB_KEY_f,           setlayout,        {.v = &layouts[1]} },
 	{ MODKEY,                    XKB_KEY_m,           setlayout,        {.v = &layouts[2]} },
+	{ MODKEY,                    XKB_KEY_u,           setlayout,        {.v = &layouts[3]} },
 	{ MODKEY,                    XKB_KEY_space,       setlayout,        {0} },
 	{ MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_space,       togglefloating,   {0} },
 	{ MODKEY,                    XKB_KEY_e,           togglefullscreen, {0} },
@@ -152,10 +153,10 @@ static const Key keys[] = {
     { MODKEY,                    XKB_KEY_l,           frame_focus,      {.i = FRAME_RIGHT} },
 
     /* SPATIAL RESIZE */
-    { MODKEY,                    XKB_KEY_H,           frame_resize,     {.i = FRAME_LEFT} },
-    { MODKEY,                    XKB_KEY_J,           frame_resize,     {.i = FRAME_DOWN} },
-    { MODKEY,                    XKB_KEY_K,           frame_resize,     {.i = FRAME_UP} },
-    { MODKEY,                    XKB_KEY_L,           frame_resize,     {.i = FRAME_RIGHT} },
+    { MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_H,           frame_resize,     {.i = FRAME_LEFT} },
+    { MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_J,           frame_resize,     {.i = FRAME_DOWN} },
+    { MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_K,           frame_resize,     {.i = FRAME_UP} },
+    { MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_L,           frame_resize,     {.i = FRAME_RIGHT} },
 
     /* SPLIT VERT & HOR */
     { MODKEY,                    XKB_KEY_i,           frame_set_split,  {.i = SPLIT_LEFT_RIGHT} },
