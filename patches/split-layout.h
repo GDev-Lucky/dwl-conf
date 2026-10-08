@@ -303,35 +303,58 @@ static void frame_set_split(const Arg *arg)
     selmon->next_split = arg->i;
 }
 
+static int frame_overlap(int a1, int a2, int b1, int b2)
+{
+    int start = MAX(a1, b1);
+    int end = MIN(a2, b2);
+
+    return end > start ? end - start : 0;
+}
+
 static void frame_focus(const Arg *arg)
 {
     Client *sel = focustop(selmon);
     Client *c;
     Client *best = NULL;
+        
+    int sx1, sy1, sx2, sy2;
+    int scx, scy;
+    int best_aligned;
+    int best_edge;
 
-    int sx;
-    int sy;
-
-    long best_score = -1;
+    int best_gap = 0;
+    int best_overlap = 0;
+    int best_offset = 0;
 
     if (!sel || sel->isfullscreen)
     {
         return;
     }
 
-    sx = sel->geom.x + sel->geom.width / 2;
-    sy = sel->geom.y + sel->geom.height / 2;
+    sx1 = sel->geom.x;
+    sy1 = sel->geom.y;
+    sx2 = sx1 + sel->geom.width;
+    sy2 = sy1 + sel->geom.height;
+
+    scx = sx1 + sel->geom.width / 2;
+    scy = sy1 + sel->geom.height / 2;
 
     wl_list_for_each(c, &clients, link)
     {
-        int cx;
-        int cy;
+        int cx1, cy1, cx2, cy2;
+        int ccx, ccy;
 
-        long score;
-        long primary;
-        long secondary;
+        int gap;
+        int overlap;
+        int offset;
+
 
         if (c == sel)
+        {
+            continue;
+        }
+
+        if (c->mon != selmon)
         {
             continue;
         }
@@ -345,75 +368,256 @@ static void frame_focus(const Arg *arg)
         {
             continue;
         }
-
-        cx= c->geom.x + c->geom.width / 2;
-        cy= c->geom.y + c->geom.height / 2;
+        
+        cx1 = c->geom.x;
+        cy1 = c->geom.y;
+        cx2 = cx1 + c->geom.width; 
+        cy2 = cy1 + c->geom.height;
+        
+        ccx = cx1 + c->geom.width / 2;
+        ccy = cy1 + c->geom.height / 2;
 
         switch(arg->i)
         {
             case FRAME_LEFT:
 
-                if (cx >= sx)
+                if (cx2 > sx1)
                 {
                     continue;
                 }
 
-                primary = sx - cx;
-                secondary = cy > sy ? cy - sy : sy - cy;
+                overlap = frame_overlap(sy1, sy2, cy1, cy2);
+
+                if (!overlap)
+                {
+                    continue;
+                }
+
+                gap = sx1 - cx2;
+                offset = ccy > scy ? ccy - scy : scy - ccy;
                 break;
 
             case FRAME_RIGHT:
 
-                if (cx <= sx)
+                if (cx1 > sx2)
                 {
                     continue;
                 }
 
-                primary = cx - sx;
-                secondary = cx > sx ? cx - sx : sx - cx;
+                overlap = frame_overlap(sy1, sy2, cy1, cy2);
+
+                if (!overlap)
+                {
+                    continue;
+                }
+
+                gap = cx1 - sx2;
+                offset = ccy > scy ? ccy - scy : scy - ccy;
                 break;
 
             case FRAME_UP: 
                 
-                if (cy >= sy)
+                if (cy2 > sy1)
                 {
                     continue;
                 }
 
-                primary = sy - cy;
-                secondary = cx > sx ? cx - sx : sx - cx;
+                overlap = frame_overlap(sx1, sx2, cx1, cx2);
+
+                if (!overlap)
+                {
+                    continue;
+                }
+
+                gap = sy1 - cy2;
+                offset = ccx > scx ? ccx - scx : scx - ccx;
                 break;
 
             case FRAME_DOWN:
 
-                if (cy <= sy)
+                if (cy1 > sy2)
                 {
                     continue;
                 }
 
-                primary = cy - sy;
-                secondary = cx > sx ? cx - sx : sx - cx;
+                overlap = frame_overlap(sx1, sx2, cx1, cx2);
+
+                if (!overlap)
+                {
+                    continue;
+                }
+
+                gap = cy1 - sy2;
+                offset = ccx > scx ? ccx - scx : scx - ccx;
                 break;
 
             default:
                 return;
         }
 
-        score = primary * 10000 + secondary;
-
-        if (best_score < 0 || score < best_score)
+        if (!best || gap < best_gap)
         {
-            best_score = score;
             best = c;
+            best_gap = gap;
+            best_overlap = overlap;
+            best_offset = offset;
         }
-        
+
+
     }
 
     if (best) 
     {
         focusclient(best, 1);
+        return;
+    }
+
+    best = NULL;
+
+    best_aligned = 0;
+    best_edge = 0;
+
+    best_overlap = 0;
+    best_offset = 0;
+
+    wl_list_for_each(c, &fstack, flink)
+    {
+        int cx1, cy1, cx2, cy2;
+        int ccx, ccy;
+
+        int overlap;
+        int aligned;
+        int edge;
+        int offset;
+        int better_edge;
+
+        if (c == sel)
+        {
+            continue;
+        }
+
+        if (c->mon != selmon)
+        {
+            continue;
+        }
+
+        if (!VISIBLEON(c, selmon))
+        {
+            continue;
+        }
+
+        if (c->isfloating || c->isfullscreen)
+        {
+            continue;
+        }
+
+        cx1 = c->geom.x;
+        cy1 = c->geom.y;
+        cx2 = cx1 + c->geom.width; 
+        cy2 = cy1 + c->geom.height;
+        
+        ccx = cx1 + c->geom.width / 2;
+        ccy = cy1 + c->geom.height / 2;
+
+        switch (arg->i)
+        {
+            case FRAME_LEFT:
+
+                overlap = frame_overlap(sy1, sy2, cy1, cy2);
+
+                aligned = overlap > 0;
+                edge = cx2;
+
+                offset = ccy > scy ? ccy - scy : scy - ccy;
+
+                break;
+
+            case FRAME_RIGHT:
+
+                overlap = frame_overlap(sy1, sy2, cy1, cy2);
+
+                aligned = overlap > 0;
+                edge = cx1;
+
+                offset = ccy > scy ? ccy - scy : scy - ccy;
+
+                break;
+
+            case FRAME_UP:
+
+                overlap = frame_overlap(sx1, sx2, cx1, cx2);
+
+                aligned = overlap > 0;
+                edge = cy2;
+
+                offset = ccx > scx ? ccx - scx : scx - ccx;
+
+                break;
+
+            case FRAME_DOWN:
+
+                overlap = frame_overlap(sx1, sx2, cx1, cx2);
+
+                aligned = overlap > 0;
+                edge = cy1;
+
+                offset = ccx > scx ? ccx - scx : scx - ccx;
+
+                break;
+
+            default:
+
+                return;
+        }
+
+        better_edge = 0;
+
+        if (!best) 
+        {
+            better_edge = 1;
+        }
+        else
+        {
+            switch(arg->i)
+            {
+                case FRAME_LEFT:
+                case FRAME_UP:
+
+                    better_edge = edge > best_edge;
+                    break;
+
+                case FRAME_RIGHT:
+                case FRAME_DOWN:
+
+                    better_edge = edge < best_edge;
+                    break;
+
+            }
+        }
+
+        if (
+                !best
+                || (aligned && !best_aligned)
+                || (aligned == best_aligned && better_edge)
+                || (aligned == best_aligned && edge == best_edge && overlap > best_overlap)
+                || (aligned == best_aligned && edge == best_edge && overlap == best_overlap && offset < best_offset)
+           )
+        {
+            best = c;
+            
+            best_aligned = aligned;
+            best_edge = edge;
+            best_overlap = overlap;
+            best_offset = offset;
+        }
+    }
+
+    if (best)
+    {
+        focusclient(best, 1);
     }
 }
+
     
 static void frame_resize(const Arg *arg)
 {
