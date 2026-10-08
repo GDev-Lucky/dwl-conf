@@ -3,6 +3,8 @@
 #ifndef DWL_LAYOUT_H
 #define DWL_LAYOUT_H
 
+static const unsigned int framegap = 8;
+
 typedef enum 
 {
     SPLIT_LEFT_RIGHT,
@@ -172,6 +174,27 @@ frame_remove(Client *c)
         return;
     }
 
+    {
+        Client *other;
+        int i;
+
+        wl_list_for_each(other, &clients, link)
+        {
+            if (!other->tile)
+            {
+                continue;
+            }
+
+            for (i = 0; i < 4; i++)
+            {
+                if (other->tile->last_neighbor[i] == c)
+                {
+                    other->tile->last_neighbor[i] = NULL;
+                }
+            }
+        }
+    }
+
     m = c->mon;
     parent = leaf->parent;
 
@@ -214,6 +237,21 @@ frame_remove(Client *c)
     c->tile = NULL;
     free(leaf);
     free(parent);
+}
+
+static int clamp(int size, int min, int max)
+{
+    if (size < min)
+    {
+        size = min;
+    }
+
+    if (size > max)
+    {
+        size = max;
+    }
+
+    return size;
 }
 
 static void frame_arrange_node(TileNode *node, Monitor *m, struct wlr_box box)
@@ -263,21 +301,44 @@ static void frame_arrange_node(TileNode *node, Monitor *m, struct wlr_box box)
 
     if (node->split == SPLIT_LEFT_RIGHT)
     {
-        int size = (int) (box.width * node->ratio);
+        int gap = (int) framegap;
+        int available;
+        int size;
+
+        available = box.width - gap;
+        if (available <= 1)
+        {
+            return;
+        }
+
+        size = (int) (available * node->ratio);
+        
+        size = clamp(size, 1, available - 1);
 
         first.width = size;
 
-        second.x += size;
-        second.width -= size;
+        second.x = box.x + size + gap;
+        second.width = available - size;
     }
     else
     {
-        int size = (int) (box.height * node->ratio);
+        int gap = (int) framegap;
+        int available;
+        int size;
+
+        available = box.height - gap;
+        if (available <= 1)
+        {
+            return;
+        }
+
+        size = (int) (available * node->ratio);
+        size = clamp(size, 1, available - 1);
 
         first.height = size;
 
-        second.y += size;
-        second.height -= size;
+        second.y = box.y + size + gap;;
+        second.height = available - size;
     }
 
     frame_arrange_node(node->first, m, first);
@@ -286,12 +347,27 @@ static void frame_arrange_node(TileNode *node, Monitor *m, struct wlr_box box)
 
 static void frame_layout(Monitor *m)
 {
+    struct wlr_box area;
+    int gap = (int) framegap;
+
     if (!m || !m->tile_root)
     {
         return;
     }
 
-    frame_arrange_node(m->tile_root, m, m->w);
+    area = m->w;
+    area.x += gap;
+    area.y += gap;
+
+    area.width -= gap * 2;
+    area.height -= gap * 2;
+
+    if (area.width <= 0 || area.height <= 0) 
+    {
+        return;
+    }
+
+    frame_arrange_node(m->tile_root, m, area);
 }
 
 
@@ -303,6 +379,31 @@ static void frame_set_split(const Arg *arg)
     }
 
     selmon->next_split = arg->i;
+}
+
+static bool is_c_valid(Client *c, Client *sel)
+{
+    if (c == sel)
+    {
+        return false;
+    }
+
+    if (c->mon != selmon)
+    {
+        return false;
+    }
+
+    if (!VISIBLEON(c, selmon))
+    {
+        return false;
+    }
+
+    if (c->isfloating || c->isfullscreen)
+    {
+        return false;
+    }
+
+    return true;
 }
 
 static int frame_overlap(int a1, int a2, int b1, int b2)
@@ -360,7 +461,7 @@ static int frame_direction_gap(Client *from, Client *to, int dir, int *gap, int 
 
         case FRAME_RIGHT:
 
-            if (tx1 > fx2)
+            if (tx1 < fx2)
             {
                 return 0;
             }
@@ -382,7 +483,7 @@ static int frame_direction_gap(Client *from, Client *to, int dir, int *gap, int 
 
         case FRAME_DOWN:
 
-            if (ty1 > fy2)
+            if (ty1 < fy2)
             {
                 return 0;
             }
@@ -409,23 +510,8 @@ static int frame_min_gap(Client *sel, int dir)
     {
         int gap;
         int overlap;
-
-        if (c == sel)
-        {
-            continue;
-        }
-
-        if (c->mon != selmon)
-        {
-            continue;
-        }
-
-        if (!VISIBLEON(c, selmon))
-        {
-            continue;
-        }
-
-        if (c->isfloating || c->isfullscreen)
+        
+        if (!is_c_valid(c, sel))
         {
             continue;
         }
@@ -444,6 +530,46 @@ static int frame_min_gap(Client *sel, int dir)
     return best;
 }
 
+static int frame_perpendicular_overlap(Client *a, Client *b, int dir)
+{
+    if (dir == FRAME_LEFT || dir == FRAME_RIGHT)
+    {
+        return frame_overlap(
+                a->geom.y,
+                a->geom.y + a->geom.height,
+                b->geom.y,
+                b->geom.y + b->geom.height);
+    }
+
+    return frame_overlap(
+            a->geom.x,
+            a->geom.x + a->geom.width,
+            b->geom.x,
+            b->geom.x + b->geom.width);
+}
+
+static int frame_warp_edge(Client *c, int dir) 
+{
+    switch(dir)
+    {
+        case FRAME_LEFT:
+            return c->geom.x + c->geom.width;
+
+        case FRAME_RIGHT:
+            return c->geom.x;
+
+        case FRAME_UP:
+            return c->geom.y + c->geom.height;
+
+        case FRAME_DOWN:
+            return c->geom.y;
+    }
+
+    return 0;
+}
+                
+
+
 static void frame_focus(const Arg *arg)
 {
     Client *sel = focustop(selmon);
@@ -453,6 +579,7 @@ static void frame_focus(const Arg *arg)
     
     int dir = arg->i;
     int opposite;
+
     int min_gap;
     int gap;
     int overlap;
@@ -460,6 +587,18 @@ static void frame_focus(const Arg *arg)
     if (!sel || !sel->tile || sel->isfullscreen)
     {
         return;
+    }
+
+    switch (dir)
+    {
+        case FRAME_LEFT:
+        case FRAME_RIGHT:
+        case FRAME_UP:
+        case FRAME_DOWN:
+            break;
+        
+        default:
+            return;
     }
     
     opposite = frame_opposite(dir);
@@ -487,22 +626,7 @@ static void frame_focus(const Arg *arg)
         {
             wl_list_for_each(c, &fstack, flink)
             {
-                if (c == sel)
-                {
-                    continue;
-                }
-
-                if (c->mon != selmon)
-                {
-                    continue;
-                }
-
-                if (!VISIBLEON(c, selmon))
-                {
-                    continue;
-                }
-
-                if (c->isfloating || c->isfullscreen)
+                if (!is_c_valid(c, sel))
                 {
                     continue;
                 }
@@ -513,6 +637,118 @@ static void frame_focus(const Arg *arg)
                 }
 
                 if (gap != min_gap)
+                {
+                    continue;
+                }
+
+                best = c;
+                break;
+            }
+        }
+    }
+    else
+    {
+        int have_aligned = 0;
+        int target_edge = 0;
+        int edge_set = 0;
+            
+        wl_list_for_each(c, &clients, link)
+        {
+            if (!is_c_valid(c, sel))
+            {
+                continue;
+            }
+
+            if (frame_perpendicular_overlap(sel, c, dir) > 0)
+            {
+                have_aligned = 1;
+                break;
+            }
+        }
+
+        wl_list_for_each(c, &clients, link)
+        {
+            int edge;
+
+            if (!is_c_valid(c, sel))
+            {
+                continue;
+            }
+
+            if (have_aligned && frame_perpendicular_overlap(sel, c, dir) <= 0)
+            {
+                continue;
+            }
+
+            edge = frame_warp_edge(c, dir);
+
+            if (!edge_set)
+            {
+                target_edge = edge;
+                edge_set = 1;
+                continue;
+            }
+
+            switch (dir)
+            {
+                case FRAME_LEFT:
+                case FRAME_UP:
+
+                    if (edge > target_edge)
+                    {
+                        target_edge = edge;
+                    }
+                    break;
+
+                case FRAME_RIGHT:
+                case FRAME_DOWN:
+
+                    if (edge < target_edge)
+                    {
+                        target_edge = edge;
+                    }
+                    break;
+            }
+        }
+
+        if (!edge_set)
+        {
+            return;
+        }
+
+        remembered = sel->tile->last_neighbor[dir];
+
+        if (
+                remembered
+                && remembered != sel
+                && remembered->tile
+                && remembered->mon == selmon
+                && VISIBLEON(remembered, selmon)
+                && !remembered->isfloating
+                && !remembered->isfullscreen
+                && frame_warp_edge(remembered, dir) == target_edge
+                && (!have_aligned || frame_perpendicular_overlap(sel, remembered, dir) > 0)
+           )
+        {
+            best = remembered;
+        }
+
+
+        if (!best)
+        {
+            wl_list_for_each(c, &fstack, flink)
+            {
+                if (!is_c_valid(c, sel))
+                {
+                    continue;
+                }
+
+                if (have_aligned && frame_perpendicular_overlap(sel, c, dir) <= 0)
+                {
+                    continue;
+                }
+
+                if (frame_warp_edge(c, dir) != target_edge)
                 {
                     continue;
                 }
