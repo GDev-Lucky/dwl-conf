@@ -570,15 +570,11 @@ static int frame_warp_edge(Client *c, int dir)
                 
 
 
-static void frame_focus(const Arg *arg)
+static Client * frame_neighbour(Client *sel, int dir)
 {
-    Client *sel = focustop(selmon);
     Client *c;
     Client *best = NULL;
     Client *remembered;
-    
-    int dir = arg->i;
-    int opposite;
 
     int min_gap;
     int gap;
@@ -586,7 +582,7 @@ static void frame_focus(const Arg *arg)
 
     if (!sel || !sel->tile || sel->isfullscreen)
     {
-        return;
+        return NULL;
     }
 
     switch (dir)
@@ -598,11 +594,10 @@ static void frame_focus(const Arg *arg)
             break;
         
         default:
-            return;
+            return NULL;
     }
     
-    opposite = frame_opposite(dir);
-    min_gap = frame_min_gap(sel, arg->i);
+    min_gap = frame_min_gap(sel, dir);
     
     if (min_gap >= 0)
     {
@@ -713,7 +708,7 @@ static void frame_focus(const Arg *arg)
 
         if (!edge_set)
         {
-            return;
+            return NULL;
         }
 
         remembered = sel->tile->last_neighbor[dir];
@@ -761,8 +756,35 @@ static void frame_focus(const Arg *arg)
 
     if (!best)
     {
+        return NULL;
+    }
+    
+    return best;
+}
+
+static void frame_focus(const Arg *arg)
+{
+    Client *sel;
+    Client *best;
+    int dir;
+    int opposite;
+
+    sel = focustop(selmon);
+    if (!sel || !sel->tile)
+    {
         return;
     }
+
+    dir = arg->i;
+
+    best = frame_neighbour(sel, dir);
+
+    if (!best)
+    {
+        return;
+    }
+
+    opposite = frame_opposite(dir);
 
     sel->tile->last_neighbor[dir] = best;
 
@@ -772,6 +794,84 @@ static void frame_focus(const Arg *arg)
     }
 
     focusclient(best, 1);
+}
+
+
+static void frame_swap_clients(Client *a, Client *b)
+{
+    TileNode *a_node;
+    TileNode *b_node;
+
+    if (!a || !b || a == b)
+    {
+        return;
+    }
+
+    if (!a->tile || !b->tile)
+    {
+        return;
+    }
+
+    a_node = a->tile;
+    b_node = b->tile;
+
+    a_node->client = b;
+    a_node->client = a;
+
+    a->tile = b_node;
+    b->tile = a_node;
+}
+
+static void frame_clear_history(Monitor* m)
+{
+    Client *c;
+    int i;
+
+    wl_list_for_each(c, &clients, link)
+    {
+        if (c->mon != m || !c->tile)
+        {
+            continue;
+        }
+
+        for (i = 0; i < 4; i++)
+        {
+            c->tile->last_neighbor[i] = NULL;
+        }
+    }
+}
+
+static void frame_swap(const Arg *arg) 
+{
+    Client *sel;
+    Client *target;
+
+    sel = focustop(selmon);
+
+    if (!sel || !sel->tile)
+    {
+        return;
+    }
+
+    if (!sel || !sel->tile)
+    {
+        return;
+    }
+
+    target = frame_neighbour(sel, arg->i);
+    
+    if (!target || !target->tile)
+    {
+        return;
+    }
+
+    frame_swap_clients(sel, target);
+
+    frame_clear_history(selmon);
+
+    arrange(selmon);
+
+    focusclient(sel, 1);
 }
 
     

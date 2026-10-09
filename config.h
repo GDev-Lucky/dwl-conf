@@ -8,10 +8,10 @@ static const int sloppyfocus               = 1;  /* focus follows mouse */
 static const int bypass_surface_visibility = 0;  /* 1 means idle inhibitors will disable idle tracking even if it's surface isn't visible  */
 static const unsigned int borderpx         = 1;  /* border pixel of windows */
 static const unsigned int snap             = 32; /* snap pixel */
-static const float rootcolor[]             = COLOR(0x222222ff);
-static const float bordercolor[]           = COLOR(0x444444ff);
-static const float focuscolor[]            = COLOR(0x005577ff);
-static const float urgentcolor[]           = COLOR(0xff0000ff);
+static const float rootcolor[]             = COLOR(0x0c0e15ff);
+static const float bordercolor[]           = COLOR(0x283347ff);
+static const float focuscolor[]            = COLOR(0x41a7fcff);
+static const float urgentcolor[]           = COLOR(0xf65866ff);
 /* This conforms to the xdg-protocol. Set the alpha to zero to restore the old behavior */
 static const float fullscreen_bg[]         = {0.0f, 0.0f, 0.0f, 1.0f}; /* You can also use glsl colors */
 
@@ -152,11 +152,17 @@ static const Key keys[] = {
     { MODKEY,                    XKB_KEY_k,           frame_focus,      {.i = FRAME_UP} },
     { MODKEY,                    XKB_KEY_l,           frame_focus,      {.i = FRAME_RIGHT} },
 
-    /* SPATIAL RESIZE */
-    { MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_H,           frame_resize,     {.i = FRAME_LEFT} },
-    { MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_J,           frame_resize,     {.i = FRAME_DOWN} },
-    { MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_K,           frame_resize,     {.i = FRAME_UP} },
-    { MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_L,           frame_resize,     {.i = FRAME_RIGHT} },
+    /* SPATIAL SHIFT */
+    { MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_H,           frame_swap,       {.i = FRAME_LEFT} },
+    { MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_J,           frame_swap,       {.i = FRAME_DOWN} },
+    { MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_K,           frame_swap,       {.i = FRAME_UP} },
+    { MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_L,           frame_swap,       {.i = FRAME_RIGHT} },
+
+    /* SPATIAL RESIZe */
+    { MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_plus,        frame_resize,     {.i = FRAME_DOWN} },
+    { MODKEY|WLR_MODIFIER_SHIFT, XKB_KEY_underscore,  frame_resize,     {.i = FRAME_UP} },
+    { MODKEY,                    XKB_KEY_equal,       frame_resize,     {.i = FRAME_LEFT} },
+    { MODKEY,                    XKB_KEY_minus,       frame_resize,     {.i = FRAME_RIGHT} },
 
     /* SPLIT VERT & HOR */
     { MODKEY,                    XKB_KEY_i,           frame_set_split,  {.i = SPLIT_LEFT_RIGHT} },
