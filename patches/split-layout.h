@@ -816,7 +816,7 @@ static void frame_swap_clients(Client *a, Client *b)
     b_node = b->tile;
 
     a_node->client = b;
-    a_node->client = a;
+    b_node->client = a;
 
     a->tile = b_node;
     b->tile = a_node;
@@ -847,11 +847,6 @@ static void frame_swap(const Arg *arg)
     Client *target;
 
     sel = focustop(selmon);
-
-    if (!sel || !sel->tile)
-    {
-        return;
-    }
 
     if (!sel || !sel->tile)
     {
