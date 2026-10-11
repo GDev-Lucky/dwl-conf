@@ -1,0 +1,8 @@
+If:
+  PathMatch: 'config\.h|patches/split-layout\.h'
+
+CompileFlags:
+  Add:
+    - -include
+    - /home/lucky/dwl-build-tmp/.clangd-prelude.h
+    - -Wno-undefined-internal
